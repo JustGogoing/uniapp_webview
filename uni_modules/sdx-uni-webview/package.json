@@ -1,7 +1,7 @@
 {
   "id": "sdx-uni-webview",
   "displayName": "WebView增强（安卓、iOS）视频全屏（安卓横屏）返回上一页、保存图片到相册",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "webview",
   "keywords": [
     "webview"

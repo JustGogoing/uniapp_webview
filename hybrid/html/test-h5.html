@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+	<title>sdx-uni-webview 双向通讯测试页</title>
+	<style>
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+			background: #f5f6fa;
+			color: #333;
+			padding: 16px;
+			padding-bottom: 32px;
+		}
+		.header {
+			background: linear-gradient(135deg, #4f8cff, #6a5cff);
+			color: #fff;
+			border-radius: 12px;
+			padding: 18px 16px;
+			margin-bottom: 16px;
+		}
+		.header h1 { font-size: 17px; margin-bottom: 6px; }
+		.header .env { font-size: 12px; opacity: .85; word-break: break-all; }
+		.card {
+			background: #fff;
+			border-radius: 12px;
+			padding: 14px 16px;
+			margin-bottom: 14px;
+			box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+		}
+		.card h2 { font-size: 14px; margin-bottom: 10px; color: #444; }
+		textarea {
+			width: 100%;
+			height: 64px;
+			border: 1px solid #e0e0e6;
+			border-radius: 8px;
+			padding: 8px 10px;
+			font-size: 13px;
+			resize: none;
+			outline: none;
+		}
+		textarea:focus { border-color: #4f8cff; }
+		.btn {
+			display: inline-block;
+			border: none;
+			border-radius: 8px;
+			padding: 10px 18px;
+			font-size: 14px;
+			color: #fff;
+			background: #4f8cff;
+			margin-top: 10px;
+		}
+		.btn:active { opacity: .8; }
+		.btn.ghost {
+			background: #fff;
+			color: #4f8cff;
+			border: 1px solid #4f8cff;
+		}
+		.log {
+			min-height: 120px;
+			max-height: 260px;
+			overflow-y: auto;
+			background: #f8f9fc;
+			border-radius: 8px;
+			padding: 10px;
+			font-size: 12px;
+			line-height: 1.6;
+		}
+		.log .item { padding: 4px 0; border-bottom: 1px dashed #e8e8ee; word-break: break-all; }
+		.log .item:last-child { border-bottom: none; }
+		.log .time { color: #999; margin-right: 6px; }
+		.log .dir-up { color: #e67e22; }
+		.log .dir-down { color: #27ae60; }
+		.log .empty { color: #bbb; text-align: center; padding: 30px 0; }
+		.tip { font-size: 11px; color: #999; margin-top: 8px; line-height: 1.6; }
+	</style>
+</head>
+<body>
+	<div class="header">
+		<h1>sdx-uni-webview 通讯测试</h1>
+		<div class="env">当前环境：<span id="env">检测中...</span></div>
+	</div>
+
+	<div class="card">
+		<h2>发送消息到宿主（H5 → 宿主）</h2>
+		<textarea id="msgInput">{"action":"ping","payload":{"from":"h5","time":0}}</textarea>
+		<button class="btn" onclick="sendToHost()">发送 postToHost</button>
+	</div>
+
+	<div class="card">
+		<h2>消息日志</h2>
+		<div class="log" id="log">
+			<div class="empty">暂无消息</div>
+		</div>
+		<div class="tip">
+			↑ <span class="dir-up">橙色</span>：H5 发给宿主的消息<br>
+			↓ <span class="dir-down">绿色</span>：宿主下发给 H5 的消息（sendToH5）
+		</div>
+	</div>
+
+	<!-- uni.webview.js 必须在 bridge.js 之前引入，均放 body 底部 -->
+	<script type="text/javascript" src="./uni.webview.1.5.8.js"></script>
+	<script type="text/javascript" src="./bridge.js"></script>
+	<script>
+		function now() {
+			return new Date().toTimeString().slice(0, 8);
+		}
+
+		function appendLog(text, dir) {
+			var log = document.getElementById('log');
+			var empty = log.querySelector('.empty');
+			if (empty) empty.remove();
+			var div = document.createElement('div');
+			div.className = 'item';
+			div.innerHTML = '<span class="time">[' + now() + ']</span>' +
+				'<span class="' + (dir === 'up' ? 'dir-up' : 'dir-down') + '">' +
+				(dir === 'up' ? '↑ H5→宿主：' : '↓ 宿主→H5：') + '</span>' + text;
+			log.appendChild(div);
+			log.scrollTop = log.scrollHeight;
+		}
+
+		// 显示运行环境（App: plus=true；鸿蒙: harmony=true）
+		window.$sdxBridge.getEnv(function (res) {
+			document.getElementById('env').innerText = JSON.stringify(res);
+		});
+
+		// 监听宿主下发的消息
+		window.$sdxBridge.onHostMessage(function (payload) {
+			var text = typeof payload === 'string' ? payload : JSON.stringify(payload);
+			appendLog(text, 'down');
+		});
+
+		// 发送消息到宿主；demo 约定 action=ping 时宿主会回发 pong
+		function sendToHost() {
+			var input = document.getElementById('msgInput').value.trim();
+			var data;
+			try {
+				data = JSON.parse(input);
+			} catch (e) {
+				data = input; // 非法 JSON 直接按字符串发送
+			}
+			if (data && typeof data === 'object' && data.action === 'ping') {
+				data.payload = data.payload || {};
+				data.payload.time = Date.now();
+			}
+			window.$sdxBridge.postToHost(data);
+			appendLog(typeof data === 'string' ? data : JSON.stringify(data), 'up');
+		}
+
+		// 页面加载完成后向宿主报到，验证 H5→宿主 链路
+		window.addEventListener('DOMContentLoaded', function () {
+			setTimeout(function () {
+				window.$sdxBridge.postToHost({ action: 'ready', from: 'test-h5.html' });
+				appendLog('{"action":"ready"}（页面加载自动发送）', 'up');
+			}, 300);
+		});
+	</script>
+</body>
+</html>
